@@ -1,0 +1,426 @@
+
+//Question 1
+Which English wikipedia article got the most traffic on October 20? 
+For this I ignored the main page and Search page since I those are not articles.
+
+
+//prerequisites load data from each hour of october 20th into tables
+
+
+//Create a table with all English data
+CREATE TABLE ENWIKI
+AS SELECT * FROM OCT20_00
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_01
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_02
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_03
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_04
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_05
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_06
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_07
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_08
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_09
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_10
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_11
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_12
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_13
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_14
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_15
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_16
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_17
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_18
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_19
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_20
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_21
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_22
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_23
+WHERE domain_code = 'en'
+ORDER BY page_title;
+
+//Run query on ENWIKI table to sum views and find max
+SELECT s.page_title, MAX(s.view_sum)
+FROM( 
+SELECT page_title, sum(count_views) view_sum 
+FROM ENWIKI 
+WHERE page_title != ‘Main_Page’ AND page_title != ’Special:Search’
+GROUP BY page_title)s
+GROUP BY s.page_title
+ORDER BY MAX(s.view_sum) DESC
+LIMIT 1
+
++---------------+---------+
+| s.page_title  |   _c1   |
++---------------+---------+
+| Bible         | 148726  |
++---------------+---------+
+
+//Question 2
+Compare total views to total links followed in the article
+
+
+
+//Create a table of the sum of all internal links
+CREATE TABLE CLICKSUM
+AS SELECT prev, sum(n) total_links
+FROM OCT_CLICKSTREAM
+WHERE type = 'link'
+GROUP BY prev;
+
+//join with table of view count for the day of the 20th?
+//Use that to create a ration of clicks
+
+
+CREATE TABLE CLICKRATIO 
+AS SELECT prev, (total_links/view_sum) click_ratio
+FROM CLICKSUM INNER JOIN ENWIKICOUNT ON CLICKSUM.prev = ENWIKICOUNT.page_title
+
+
+SELECT * FROM CLICKRATIO
+ORDER BY click_ratio DESC
+LIMIT 5;
+
++------------------------------------------------+--------------------+
+|                      prev                      |    click_ratio     |
++------------------------------------------------+--------------------+
+| Islam_in_the_Arctic                            | 8984.0             |
+| P._Sai_Kumar                                   | 7937.0             |
+| 2020_French_Open_–_Women's_Singles_Qualifying  | 5794.5             |
+| Dune_(2020_film)                               | 5316.190265486725  |
+| Tennis_on_ESPN                                 | 4946.0             |
++------------------------------------------------+--------------------+
+
+This table shows the ratio of total links followed in the month of October divided by the total page views on October 20th
+Gives an extimate as to which pages often have users follow internal links without having to do the time consuming calculations of finding to the total page views for each page in the month and reuses data that has already been calculated.
+
+
+
+//Question 3
+What series of wikipedia articles, starting with Hotel California, keeps the largest fraction of its readers clicking on internal links?
+
+
+//Create a pathwiegth table
+
+CREATE TABLE PATHWEIGHT 
+AS SELECT oct_clickstream.prev, oct_clickstream.curr, clickratio.click_ratio
+FROM oct_clickstream
+INNER JOIN clickratio ON oct_clickstream.curr = clickratio.prev
+WHERE oct_clickstream.type = 'link'
+
+
+//Recursive functions not possible in hive
+SELECT path, (t1.newratio + t0.click_ratio) newratio
+FROM PATHWEIGHT t0
+INNER JOIN
+(
+SELECT CONCAT (t3.path, "/", t2.curr) path, (t2.curr) currentpage, (t3.newratio + t2.click_ratio) newratio
+FROM PATHWEIGHT t2
+INNER JOIN
+(
+SELECT CONCAT(t5.prev,"/", t4.prev, "/", t4.curr) path, (t4.curr) currentpage, (t4.click_ratio) newratio
+FROM PATHWEIGHT t5
+INNER JOIN PATHWEIGHT t4 
+ON t5.curr = t4.prev
+WHERE t5.prev = "Hotel_California"
+)t3
+ON t3.currentpage = t2.prev
+)t1
+ON t1.currentpage = t0.prev
+ORDER BY newratio DESC
+LIMIT 1;
+
++----------------------------------------------------+--------------------+
+|                        path                        |      newratio      |
++----------------------------------------------------+--------------------+
+| Hotel_California/Taxi_Driver/Academy_Award_for_Best_Actor/Timothée_Chalamet | 5461.007468817275  |
++----------------------------------------------------+--------------------+
+
+//Question 4 
+Find an example of an English wikipedia article that is relatively more popular in the UK. Find the same for the US and Australia.
+
+Since Wikipedia’s headquarters is in San Francisco all the data is based off of that timezone. Using this I decided on the waking hours for the US, UK, and Australia.
+US is from 6am-10pm, UK is from 2pm- 6am, Australia is from 1am - 5pm
+
+Using this guideline I combined all the tables in the time zones.
+
+From these I compared the different timezones to find stuff.
+
+CREATE TABLE USWIKI
+AS SELECT * FROM OCT20_06
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_06
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_07
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_08
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_09
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_10
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_11
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_12
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_13
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_14
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_15
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_16
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_17
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_18
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_19
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_20
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_21
+ORDER BY page_title;
+
+CREATE TABLE UKWIKI
+AS SELECT * FROM OCT20_14
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_15
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_16
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_17
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_18
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_19
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_20
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_21
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_22
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_23
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_00
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_01
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_02
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_03
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_04
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_05
+ORDER BY page_title;
+
+CREATE TABLE AUWIKI
+AS SELECT * FROM OCT20_01
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_02
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_03
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_04
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_05
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_06
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_07
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_08
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_09
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_10
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_11
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_12
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_13
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_14
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_15
+WHERE domain_code = 'en' UNION ALL SELECT * FROM
+OCT20_16
+ORDER BY page_title;
+
+//After the tables are created I need to sum the counts using the same method as question 1
+CREATE TABLE USWIKICOUNT 
+AS SELECT page_title, sum(count_views) view_sum
+FROM USWIKI 
+WHERE page_title != 'Main_Page' AND page_title != 'Special:Search'
+GROUP BY page_title;
+
+CREATE TABLE UKWIKICOUNT 
+AS SELECT page_title, sum(count_views) view_sum
+FROM UKWIKI 
+WHERE page_title != 'Main_Page' AND page_title != 'Special:Search'
+GROUP BY page_title;
+
+CREATE TABLE AUWIKICOUNT 
+AS SELECT page_title, sum(count_views) view_sum
+FROM AUWIKI 
+WHERE page_title != 'Main_Page' AND page_title != 'Special:Search'
+GROUP BY page_title;
+
+
+After the sums have been calcualted I need to look at the difference in views for the time frame
+
+//US vs UK
+Select t1.page_title, (t1.view_sum - t2.view_sum) difference
+from USWIKICOUNT t1
+INNER JOIN UKWIKICOUNT t2
+ON t1.page_title = t2.page_title
+ORDER BY ABS(difference) DESC
+LIMIT 5;
+
++------------------------------+-------------+
+|        t1.page_title         | difference  |
++------------------------------+-------------+
+| Wikipedia:Hauptseite         | 39704       |
+| Murder_of_Robert_McCartney   | 36131       |
+| Moise_Kean                   | 32003       |
+| Sisters_at_Heart             | -30661      |
+| Wikipédia:Accueil_principal  | 24741       |
++------------------------------+-------------+
+
+Positive values indicate more searches in the US
+Negative values indicate more seachers in the UK
+
+Murder of Robert McCarney is much more popular in the US
+Sisters at Heart is much more popular in the UK
+
+
+//US vs AU
+Select t1.page_title, (t1.view_sum - t2.view_sum) difference
+from USWIKICOUNT t1
+INNER JOIN AUWIKICOUNT t2
+ON t1.page_title = t2.page_title
+ORDER BY ABS(difference) DESC
+LIMIT 5;
+
++----------------------------------------------+-------------+
+|                t1.page_title                 | difference  |
++----------------------------------------------+-------------+
+| Moise_Kean                                   | 35847       |
+| Richard_Mansfield                            | 28085       |
+| Sisters_at_Heart                             | -27360      |
+| Sophia_Thomalla                              | 22774       |
+| Dancing_with_the_Stars_(American_season_29)  | -21740      |
++----------------------------------------------+-------------+
+
+Positive values indicate more searches in the US
+Negative values indicate more searches in Australia
+
+Moise Kean is more popular in the US
+Sisters at Heart is more popular in Australia
+
+//UK vs AU
+Select t1.page_title, (t1.view_sum - t2.view_sum) difference
+from UKWIKICOUNT t1
+INNER JOIN AUWIKICOUNT t2
+ON t1.page_title = t2.page_title
+ORDER BY ABS(difference) DESC
+LIMIT 5;
+
++------------------------------+-------------+
+|        t1.page_title         | difference  |
++------------------------------+-------------+
+| Wikipedia:Hauptseite         | -40282      |
+| Murder_of_Robert_McCartney   | -33633      |
+| Richard_Mansfield            | 28788       |
+| Wikipédia:Accueil_principal  | -26918      |
+| Jeffrey_Toobin               | 25264       |
++------------------------------+-------------+
+
+Positive values indicate more searches in the UK
+Negative values indicate more searches in Australia
+
+Richard Mansfield is more popualr in the UK
+Murder of Robert McMartney is more popular in Australia
+
+//Question 5
+Analyze how many users will see the average vandalized wikipedia page before the offending edit is reversed.
+
+//Only using data from one day to estimate
+
+//Trim down the 70 columns of the original input into a more workable set
+CREATE TABLE TRIMMEDREVISIONHISTORY
+AS SELECT revision_id id, page_title, revision_is_identity_reverted reverted, revision_first_identity_reverting_revision_id reverter_id, from_utc_timestamp(date_format(event_timestamp,'yyyy-MM-dd HH:mm:ss.SSSSSS'),'UTC') revisiondate
+FROM REVISIONHISTORY
+WHERE wiki_db = 'enwiki' AND revision_id IS NOT NULL
+
+
+//Join on itself to connect reverter_id to an id to get time
+//Join on enwikicount to get the count for a page for a day
+//calculate the uptime in days
+CREATE TABLE REVISIONUPTIME
+AS SELECT t1.id, t1.page_title, t1.reverted, t1.reverter_id, t1.revisiondate editdate, t2.revisiondate revertdate, (((unix_timestamp(t2.revisiondate) - unix_timestamp(t1.revisiondate))/60)/1440) uptimeDays, t3.view_sum
+FROM TRIMMEDREVISIONHISTORY t1
+INNER JOIN TRIMMEDREVISIONHISTORY t2
+ON t2.id = t1.reverter_id
+INNER JOIN ENWIKICOUNT t3
+ON t1.page_title = t3.page_title
+
+//calculate the average views on a vandalized page
+SELECT AVG(t1.estimatedviews) 
+FROM
+(
+SELECT id, (uptimedays*view_sum) estimatedviews FROM REVISIONUPTIME
+)t1;
+
++--------------------+
+|        _c0         |
++--------------------+
+| 914.4948418680623  |
++--------------------+
+
+
+
+//Question 6
+Which page has the most reverted edits in october 2020
+
+SELECT page_title, COUNT(id) edit_count
+FROM TRIMMEDREVISIONHISTORY
+WHERE reverter_id IS NOT NULL
+GROUP BY page_title
+ORDER BY edit_count DESC
+LIMIT 4;
+
+
++-----------------------------------------------+-------------+
+|                  page_title                   | edit_count  |
++-----------------------------------------------+-------------+
+| Administrator_intervention_against_vandalism  | 8061        |
+| Teahouse                                      | 4158        |
+| Usernames_for_administrator_attention         | 3396        |
+| Administrators'_noticeboard/Incidents         | 3322        |
++-----------------------------------------------+-------------+
+
+
